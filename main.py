@@ -23,18 +23,10 @@ import sys
 # TIP: If you open your Battlesnake URL in a browser you should see this data
 def info() -> typing.Dict:
     print("INFO")
-    if sys.argv[2] == 'red':
-        colorCode = '#FF0000'
-    elif sys.argv[2] == 'green':
-        colorCode = '#00FF00'
-    elif sys.argv[2] == 'blue':
-        colorCode = '#0000FF'
-    else:
-        colorCode = "#888888"
     return {
         "apiversion": "1",
         "author": "me",  # TODO: Your Battlesnake Username
-        "color": colorCode,  # TODO: Choose color
+        "color": sys.argv[2],  # TODO: Choose color
         "head": "default",  # TODO: Choose head
         "tail": "default",  # TODO: Choose tail
     }
