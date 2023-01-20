@@ -37,7 +37,7 @@ def run_server(handlers: typing.Dict, port_num: int):
         )
         return response
 
-    host = "0.0.0.0"
+    host = "127.0.0.1"
     print(port_num)
     port = int(os.environ.get("PORT", port_num))
 
