@@ -2,26 +2,32 @@
 
 import json
 
-games = []
-for i in range(1, 101):
-    game = {"turns": [], 'winner': 0}
+training_examples = []
+training_labels = []
+for i in range(1, 2201):
     with open(f"games/game{i}.json", "r") as gamefile:
         lines = [json.loads(line) for line in gamefile.readlines()]
         if lines[-1]['isDraw']:
-            game['winner'] = -1
-        else:
-            game['winner'] = int(lines[-1]['winnerName'])
+            continue
         for turn in lines[1:-1]:
             turnArray = [[0] * turn['board']['height'] for i in range(turn['board']['width'])]
             for snake in turn['board']['snakes']:
                 for part in snake['body']:
-                    turnArray[part['x']][part['y']] = int(snake['name'])
+                    if snake['name'] == '0':
+                        turnArray[part['x']][part['y']] = 1
+                    else:
+                        turnArray[part['x']][part['y']] = -1
             for food in turn['board']['food']:
                 assert turnArray[food['x']][food['y']] == 0
-                turnArray[food['x']][food['y']] = 3
-            game['turns'].append(turnArray)
-    games.append(game)
-
+                turnArray[food['x']][food['y']] = 2
+            flatArray = [item for sublist in turnArray for item in sublist]
+            training_examples.append(flatArray)
+            if int(lines[-1]['winnerName']) == 0:
+                training_labels.append(1)
+            else:
+                training_labels.append(0)
 # Write training data to file
-with open("trainingData.json", "w") as trainFile:
-    trainFile.write(json.dumps(games))
+with open("trainingExamples.json", "w") as trainFile:
+    trainFile.write(json.dumps(training_examples))
+with open("trainingLabels.json", "w") as lableFile:
+    lableFile.write(json.dumps(training_labels))
