@@ -13,14 +13,12 @@
 from inspect import ismemberdescriptor
 from operator import is_
 import random
-import tarfile
 import typing
 import sys
 
 from snakeSupervision.predictor import Predictor
 
 predictor  = Predictor()
-
 
 # info is called when you create your Battlesnake on play.battlesnake.com
 # and controls your Battlesnake's appearance
@@ -47,23 +45,139 @@ def end(game_state: typing.Dict):
     print("GAME OVER\n")
 
 
+# Given a square, return all adjacent squares that are in bounds
+def get_adjacent(position: typing.Dict, game_state: typing.Dict):
+    up = {'y': position['y']+1, 'x': position['x']}
+    down = {'y': position['y']-1, 'x': position['x']}
+    left = {'x': position['x']-1, 'y': position['y']}
+    right = {'x': position['x']+1, 'y': position['y']}
+    return [ 
+        pos for pos in [up, down, left, right]
+        if pos['y'] >= 0
+        if pos['y'] <= game_state['board']['height']
+        if pos['x'] >= 0
+        if pos['x'] <= game_state['board']['width']
+    ]
+
+
+# Given head position and direction, return the new head position
+def get_move_position(head: typing.Dict, direction: str):
+    if direction == 'up':
+        return {'y': head['y']+1, 'x': head['x']}
+    elif direction == 'down':
+        return {'y': head['y']-1, 'x': head['x']}
+    elif direction == 'left':
+        return {'x': head['x']-1, 'y': head['y']}
+    elif direction == 'right':
+        return {'x': head['x']+1, 'y': head['y']}
+
+
+# Given game state & current safe moves, determines fatal out-of-bounds moves 
+# returns updated safe moves
+def avoid_walls(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
+    my_head = game_state["you"]["body"][0]  # Coordinates of your head
+    board_width = game_state['board']['width']
+    board_height = game_state['board']['height']
+
+    # Left wall is at x = -1, don't go there
+    if my_head['x'] == 0:
+        danger_risk['left'] += 1
+
+    # Right wall is at x = board_width, don't go there
+    elif my_head['x'] == board_width-1:
+        danger_risk['right'] += 1
+
+    # Bottom wall is at y = -1, don't go there
+    if my_head['y'] == 0:
+        danger_risk['down'] += 1
+
+    # Top wall is at y = board_height, don't go there
+    elif my_head['y'] == board_height-1:
+        danger_risk['up'] += 1
+
+    return danger_risk
+
+
+# Given game state & current safe moves, determines moves that will be fatal colision
+# with any snake body. Returns updated safe moves.
+def avoid_snakes(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
+    my_head = game_state["you"]["body"][0]  # Coordinates of your head
+
+    for move in danger_risk:
+        next_head = get_move_position(my_head, move)
+        # Loop through all snakes on the board
+        for snake in game_state['board']['snakes']:
+            # Loop through all body parts of this snake
+            for square in snake['body'][:-1]:   # Skip the tail, hadled below
+                if square == next_head:
+                    danger_risk[move] += 1
+            # Tail is a special case, if the snake can't eat then it can't grow
+            # Let the model handle this case
+
+    return danger_risk
+
+
+def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
+    my_head = game_state["you"]["body"][0]  # Coordinates of your head
+    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
+
+    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
+        danger_risk["left"] += 1
+
+    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
+        danger_risk["right"] += 1
+
+    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
+        danger_risk["down"] += 1
+
+    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
+        danger_risk["up"] += 1
+
+    return danger_risk
+
+
 # move is called on every turn and returns your next move
 # Valid moves are "up", "down", "left", or "right"
 # See https://docs.battlesnake.com/api/example-move for available data
 def move(game_state: typing.Dict) -> typing.Dict:
-    predictions = predictor.predict(game_state)
-    print(f"Predictions: {predictions}")
-    bestMove = predictions[0]
-    bestIndex = 0
-    for i in range(1, len(predictions)):
-        if predictions[i] > bestMove:
-            bestMove = predictions[i]
-            bestIndex = i
 
-    next_move = ["up", "down", "left", "right"][bestIndex]
+    directions = ["up", "down", "left", "right"]
+    danger_risk = {"up": 0.0, "down": 0.0, "left": 0.0, "right": 0.0}
+
+    # Avoid your own neck
+    danger_risk = avoid_neck(game_state, danger_risk)
+
+    # Avoid hitting the walls
+    danger_risk = avoid_walls(game_state, danger_risk)
+
+    # Avoid hitting snakes
+    danger_risk = avoid_snakes(game_state, danger_risk)
+
+    # Sort directions by danger risk
+    sorted_risk = sorted(directions, key=lambda x: danger_risk[x])
+
+    # For all moves with lowest risk, predict outcomes with model
+    safe_moves = [
+        (move, risk)
+        for move, risk in sorted_risk.items()
+        if danger_risk[move] == danger_risk[sorted_risk[0]]
+    ]
+    random.shuffle(safe_moves)  # Shuffle to avoid bias
+
+    # Predict outcomes for all safe moves
+    predictions = []
+    for move in safe_moves:
+        # Send game state and action to model
+        predictions.append(predictor.predict(game_state, move))
+        
+    # Select best move
+    print(f"Predictions: {predictions}")
+    sorted_predictions = sorted(predictions, reverse=True, key=lambda x: x[1])
+    next_move = sorted_predictions[0][0]
+
+    # Respond to server
     print(f"MOVE {game_state['turn']}: Best move is {next_move}!")
     return {'move': next_move}
-
 
 # Start server when `python main.py` is run
 if __name__ == "__main__":
