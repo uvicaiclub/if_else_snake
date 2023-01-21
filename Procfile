@@ -1,0 +1,1 @@
+web: python3 main.py 8080 "#FF0000"
