@@ -13,23 +13,30 @@ class Predictor:
         # Load model
         self.model = keras.models.load_model("snakeSupervision/trainedModel.h5")
 
-    def predict(self, game_state: typing.Dict, action: str) -> typing.Tuple(str, float):
+    def predict(self, game_state: typing.Dict, action: str, subject: str) -> typing.Tuple(str, float):
         board_width = game_state['board']['width']
         board_height = game_state['board']['height']
+        subject_snake = {}
+        for snake in game_state['board']['snakes']:
+            if snake['id'] == subject:
+                subject_snake = snake
+                break
 
-        # Transform game state into nn input array
-        snake_bodies = []
+        # Transform game state into nn input arrays
+        subject_head = np.zeros((board_width, board_height))
+        subject_head[subject_snake['head']['x']][subject_snake['head']['y']] = 1
+        subject_body = np.zeros((board_width, board_height))
+        for part in subject_snake['body'][1:]:
+            subject_body[part['x']][part['y']] = 1
+
+        heads_array = np.zeros((board_width, board_height))
+        bodies_array = np.zeros((board_width, board_height))
         for snake in game_state['board']['snakes']:
-            body_array = np.zeros((board_width, board_height))
-            for part in snake['body']:
-                body_array[part['x']][part['y']] = 1
-            snake_bodies.append(body_array)
-        
-        snake_heads = []
-        for snake in game_state['board']['snakes']:
-            head_array = np.zeros((board_width, board_height))
-            head_array[snake['head']['x']][snake['head']['y']] = 1
-            snake_heads.append(head_array)
+            if snake['id'] == subject:
+                continue
+            heads_array[snake['head']['x']][snake['head']['y']] = 1
+            for part in snake['body'][1:]:
+                bodies_array[part['x']][part['y']] = 1
 
         food_array = np.zeros((board_width, board_height))
         for food in game_state['board']['food']:
@@ -46,13 +53,17 @@ class Predictor:
             actions_array[3] = 1
 
         # Flatten arrays into 1D arrays
-        snake_bodies = np.array(snake_bodies).flatten()
-        snake_heads = np.array(snake_heads).flatten()
+        subject_head = subject_head.flatten()
+        subject_body = subject_body.flatten()
+        heads_array = heads_array.flatten()
+        bodies_array = bodies_array.flatten()
         food_array = food_array.flatten()
         actions_array = actions_array.flatten()
 
         # Combine arrays into one nn input array
-        nn_inputs = np.concatenate((snake_bodies, snake_heads, food_array, actions_array))
+        nn_inputs = np.concatenate((
+            subject_head, subject_body, heads_array, bodies_array, food_array, actions_array
+        ))
 
         # Predict probabilty of winning with this action
         return (action, self.model.predict(nn_inputs))

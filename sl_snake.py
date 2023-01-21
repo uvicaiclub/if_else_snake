@@ -168,7 +168,9 @@ def move(game_state: typing.Dict) -> typing.Dict:
     predictions = []
     for move in safe_moves:
         # Send game state and action to model
-        predictions.append(predictor.predict(game_state, move))
+        predictions.append(predictor.predict(
+            game_state, game_state['you']['id'], move
+        ))
         
     # Select best move
     print(f"Predictions: {predictions}")
