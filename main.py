@@ -44,11 +44,11 @@ def end(game_state: typing.Dict):
 
 
 # Given a square, return all adjacent squares that are in bounds
-def get_adjacent(square: typing.Dict, game_state: typing.Dict):
-    up = {'y': square['y']+1, 'x': square['x']}
-    down = {'y': square['y']-1, 'x': square['x']}
-    left = {'x': square['x']-1, 'y': square['y']}
-    right = {'x': square['x']+1, 'y': square['y']}
+def get_adjacent(position: typing.Dict, game_state: typing.Dict):
+    up = {'y': position['y']+1, 'x': position['x']}
+    down = {'y': position['y']-1, 'x': position['x']}
+    left = {'x': position['x']-1, 'y': position['y']}
+    right = {'x': position['x']+1, 'y': position['y']}
     return [ 
         pos for pos in [up, down, left, right]
         if pos['y'] >= 0
@@ -57,168 +57,117 @@ def get_adjacent(square: typing.Dict, game_state: typing.Dict):
         if pos['x'] <= game_state['board']['width']
     ]
 
+# Given head position and direction, return the new head position
+def get_move_position(head: typing.Dict, direction: str):
+    if direction == 'up':
+        return {'y': head['y']+1, 'x': head['x']}
+    elif direction == 'down':
+        return {'y': head['y']-1, 'x': head['x']}
+    elif direction == 'left':
+        return {'x': head['x']-1, 'y': head['y']}
+    elif direction == 'right':
+        return {'x': head['x']+1, 'y': head['y']}
+
+
+# Given list of directions and head, returns all directions that will yield food
+def food_moves(game_state: typing.Dict, head: typing.Dict, directions: typing.Dict)-> typing.Dict:
+    directions_with_food  = []
+    for move in directions:
+        next_head = get_move_position(head, move)
+        if next_head in game_state['board']['food']:
+            directions_with_food.append(move)
+
+    return directions_with_food
+
 
 # Given game state & current safe moves, determines fatal out-of-bounds moves 
 # returns updated safe moves
-def avoid_walls(game_state: typing.Dict, is_move_safe: typing.Dict)-> typing.Dict:
+def avoid_walls(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
     board_width = game_state['board']['width']
     board_height = game_state['board']['height']
 
     # Left wall is at x = -1, don't go there
     if my_head['x'] == 0:
-        is_move_safe['left'] = False
+        danger_risk['left'] += 1
 
     # Right wall is at x = board_width, don't go there
     elif my_head['x'] == board_width-1:
-        is_move_safe['right'] = False
+        danger_risk['right'] += 1
 
     # Bottom wall is at y = -1, don't go there
     if my_head['y'] == 0:
-        is_move_safe['down'] = False
+        danger_risk['down'] += 1
 
     # Top wall is at y = board_height, don't go there
     elif my_head['y'] == board_height-1:
-        is_move_safe['up'] = False
+        danger_risk['up'] += 1
 
-    return is_move_safe
+    return danger_risk
 
 
 # Given game state & current safe moves, determines moves that will be fatal colision
 # with any snake body. Returns updated safe moves.
-def avoid_snakes(game_state: typing.Dict, is_move_safe: typing.Dict)-> typing.Dict:
+def avoid_snakes(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
 
-    # Loop through all snakes on the board
-    for snake in game_state['board']['snakes']:
+    for move in danger_risk:
+        next_head = get_move_position(my_head, move)
+        # Loop through all snakes on the board
+        for snake in game_state['board']['snakes']:
+            # Loop through all body parts of this snake
+            for square in snake['body'][:-1]:   # Skip the tail, hadled below
+                if square == next_head:
+                    danger_risk[move] += 1
+            # Tail is a special case, if the snake can't eat then it can't grow
+            if snake['body'][-1] == next_head:
+                for head_reach in get_adjacent(snake['head'], game_state):
+                    if head_reach in game_state['board']['food']:
+                        danger_risk[move] += 1
 
-        # Loop through all body parts of this snake
-        for square in snake['body']:
-
-            # If this body part has the same x position as our head 
-            # then it must be above/below us
-            if square['x'] == my_head['x']:
-
-                # If it's directly above us then don't move up
-                if square['y'] == my_head['y'] + 1:
-                    is_move_safe['up'] = False
-
-                # If it's directly below us then don't move down
-                elif square['y'] == my_head['y'] - 1:
-                    is_move_safe['down'] = False
-
-            # If this body part has the same y position as our head
-            # then it must be to the left/right of us
-            elif square['y'] == my_head['y']:
-
-                # If it's directly to the right of us then don't move right
-                if square['x'] == my_head['x'] + 1:
-                    is_move_safe['right'] = False
-
-                # If it's directly to the left of us then don't move left
-                elif square['x'] == my_head['x'] - 1:
-                    is_move_safe['left'] = False
-
-    return is_move_safe
+    return danger_risk
 
 
-def avoid_heads(game_state: typing.Dict, is_move_safe: typing.Dict)-> typing.Dict:
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
+# Add risk of collisions with other snakes' heads
+def avoid_heads(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
+    my_head = game_state['you']['head']  # Position of your head
 
-    # Loop through all snakes on the board
-    for snake in game_state['board']['snakes']:
+    # Loop through possible moves
+    for move in danger_risk:
+        next_head = get_move_position(my_head, move)
+        # Loop through all snakes on the board
+        for snake in game_state['board']['snakes']:
+            # Don't avoid your own head
+            if snake['head'] == my_head:
+                continue
+            # Get possible moves for this snake
+            adversary_moves = get_adjacent(snake['body'][0], game_state)
 
-        # Don't avoid your own head
-        if snake['id'] == game_state['you']['id']:
-            continue    # Skip to next snake
-        
-        # Get the head of this snake
-        other_head = snake['body'][0]
+            # Loop through all possible moves for this snake's head
+            for adversary_move in adversary_moves:
+                if  adversary_move == next_head:
+                    danger_risk[move] += 0.25   # A wild guess
 
-        # Get possible moves for this snake's head
-        possible_moves = get_adjacent(other_head, game_state)
-
-        # Loop through all possible moves for this snake's head
-        for move in possible_moves:
-            
-            # If this square has the same x position as our head
-            # then it must be above/below us
-            if move['x'] == my_head['x']:
-                
-                # If it's directly above us then don't move up
-                if move['y'] == my_head['y'] + 1:
-                    is_move_safe['up'] = False
-
-                # If it's directly below us then don't move down
-                elif move['y'] == my_head['y'] - 1:
-                    is_move_safe['down'] = False
-
-            # If this square has the same y position as our head
-            # then it must be to the left/right of us
-            elif move['y'] == my_head['y']:
-
-                # If it's directly to the right of us then don't move right
-                if move['x'] == my_head['x'] + 1:
-                    is_move_safe['right'] = False
-
-                # If it's directly to the left of us then don't move left
-                elif move['x'] == my_head['x'] - 1:
-                    is_move_safe['left'] = False
-
-    return is_move_safe
+    return danger_risk
 
 
-def avoid_neck(game_state: typing.Dict, is_move_safe: typing.Dict)-> typing.Dict:
+def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
     my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
 
     if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        is_move_safe["left"] = False
+        danger_risk["left"] += 1
 
     elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        is_move_safe["right"] = False
+        danger_risk["right"] += 1
 
     elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        is_move_safe["down"] = False
+        danger_risk["down"] += 1
 
     elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        is_move_safe["up"] = False
+        danger_risk["up"] += 1
 
-    return is_move_safe
-
-
-# Given list of safe moves, returns list of moves that contain food
-def eat_food(game_state: typing.Dict, safe_moves: typing.Dict)-> typing.Dict:
-    # Make a copy of safe moves
-    moves_with_food = safe_moves.copy()
-
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-
-    # If moving up is safe, check if there is food there
-    if safe_moves['up'] == True:
-        up_move = {'x': my_head['x'], 'y': my_head['y'] + 1}
-        if up_move not in game_state['board']['food']:
-            moves_with_food['up'] = False
-    
-    # If moving down is safe, check if there is food there
-    if safe_moves['down'] == True:
-        down_move = {'x': my_head['x'], 'y': my_head['y'] - 1}
-        if down_move not in game_state['board']['food']:
-            moves_with_food['down'] = False
-
-    # If moving left is safe, check if there is food there
-    if safe_moves['left'] == True:
-        left_move = {'x': my_head['x'] - 1, 'y': my_head['y']}
-        if left_move not in game_state['board']['food']:
-            moves_with_food['left'] = False
-
-    # If moving right is safe, check if there is food there
-    if safe_moves['right'] == True:
-        right_move = {'x': my_head['x'] + 1, 'y': my_head['y']}
-        if right_move not in game_state['board']['food']:
-            moves_with_food['right'] = False
-
-    return moves_with_food
+    return danger_risk
 
 
 # move is called on every turn and returns your next move
@@ -226,51 +175,41 @@ def eat_food(game_state: typing.Dict, safe_moves: typing.Dict)-> typing.Dict:
 # See https://docs.battlesnake.com/api/example-move for available data
 def move(game_state: typing.Dict) -> typing.Dict:
 
-    is_move_safe = {"up": True, "down": True, "left": True, "right": True}
+    directions = ["up", "down", "left", "right"]
+    danger_risk = {"up": 0.0, "down": 0.0, "left": 0.0, "right": 0.0}
 
     # Avoid your own neck
-    is_move_safe = avoid_neck(game_state, is_move_safe)
+    danger_risk = avoid_neck(game_state, danger_risk)
 
     # Avoid hitting the walls
-    is_move_safe = avoid_walls(game_state, is_move_safe)
+    danger_risk = avoid_walls(game_state, danger_risk)
 
     # Avoid hitting snakes
-    is_move_safe = avoid_snakes(game_state, is_move_safe)
+    danger_risk = avoid_snakes(game_state, danger_risk)
 
     # Avoid hitting heads
-    is_move_safe =  avoid_heads(game_state, is_move_safe)
+    danger_risk =  avoid_heads(game_state, danger_risk)
+
+    # Sort directions by danger risk
+    sorted_risk = sorted(directions, key=lambda x: danger_risk[x])
+
+    # For all moves with lowest risk, check if there is food there
+    safe_moves = [
+        move 
+        for move in sorted_risk 
+        if danger_risk[move] == danger_risk[sorted_risk[0]]
+    ]
+    random.shuffle(safe_moves)  # Shuffle to avoid bias
     
-    # Are there any safe moves left?
-    safe_moves = []
-    for move, isSafe in is_move_safe.items():
-        if isSafe:
-            safe_moves.append(move)
-
-    # Check for moves that get food
-    moves_with_food = eat_food(game_state, is_move_safe)
-
-    # Are there any food moves?
-    food_moves = []
-    for move, hasFood in moves_with_food.items():
-        if hasFood:
-            food_moves.append(move)
-
-    if len(food_moves) > 0:
-        # Choose a random food move (these moves are safe)
-        next_move = random.choice(food_moves)
-
-        print(f"MOVE {game_state['turn']}: {next_move}")
-        return {"move": next_move}
-    elif len(safe_moves) > 0:
-        # Choose a random move from the safe ones
-        next_move = random.choice(safe_moves)
-
-        print(f"MOVE {game_state['turn']}: {next_move}")
-        return {"move": next_move}
+    nom_nom_nom = food_moves(game_state, game_state['you']['head'], safe_moves)
+    if len(nom_nom_nom) > 0:
+        next_move = nom_nom_nom[0]
     else:
-        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving randomly!")
-        next_move = random.choice(["up", "down", "left", "right"])
-        return {'move': next_move}
+        next_move = safe_moves[0]
+
+    print(f"MOVE {game_state['turn']}: {next_move} | {danger_risk}")
+    # Send response to server
+    return {"move": next_move}
 
 
 # Start server when `python main.py` is run
