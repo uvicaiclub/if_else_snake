@@ -8,21 +8,23 @@ from keras.layers import Dense
 
 # loads training examples from json file
 def getTrainingExamples():
+    trainingExamples = []
     with open("trainingExamples.json") as json_file:
-        trainingExamples = json.load(json_file)
+        for line in json_file:
+            trainingExamples.append(json.loads(line))
     return trainingExamples
 
 
 # loads training labels from json file
 def getTrainingLabels():
     with open("trainingLabels.json") as json_file:
-        trainingLabels = json.load(json_file)
+        trainingLabels = [int(c) for c in json_file.read()]
     return trainingLabels
 
 
 # constructs nueral network
 model = Sequential()
-model.add(Dense(30, activation='relu', input_dim=121))
+model.add(Dense(30, activation='relu', input_dim=609))
 model.add(Dense(30, activation='relu'))
 model.add(Dense(1, activation='sigmoid'))
 
@@ -39,7 +41,7 @@ trainingLabels = np.asarray(getTrainingLabels())
 
 
 # trains model
-model.fit(trainingExamples, trainingLabels, epochs=20)
+model.fit(trainingExamples, trainingLabels, epochs=5)
 
 
 # saves model
