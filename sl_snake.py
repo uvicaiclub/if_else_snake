@@ -198,20 +198,21 @@ def move(game_state: typing.Dict) -> typing.Dict:
         if danger_risk[move] == danger_risk[sorted_risk[0]]
     ]
     random.shuffle(safe_moves)  # Shuffle to avoid bias
-    next_move = safe_moves[0]
-    """
-    # Predict outcomes for all safe moves
-    predictions = []
-    for move in safe_moves:
-        # Send game state and action to model
-        predictions.append(predictor.predict(
-            game_state, game_state['you']['id'], move
-        ))
+    if len(safe_moves) == 1:
+        next_move = safe_moves[0]
+    else:
+        # Predict outcomes for all safe moves
+        predictions = []
+        for move in safe_moves:
+            # Send game state and action to model
+            predictions.append(predictor.predict(
+                game_state, move, game_state['you']['id']
+            ))
 
-    # Select best move
-    print(f"Predictions: {predictions}")
-    sorted_predictions = sorted(predictions, reverse=True, key=lambda x: x[1])
-    next_move = sorted_predictions[0][0]"""
+        # Select best move
+        print(f"Predictions: {predictions}")
+        sorted_predictions = sorted(predictions, reverse=True, key=lambda x: x[1])
+        next_move = sorted_predictions[0][0]
 
     # Write state to file
     with open(f"games/{game_state['game']['id']}.json", "a") as fp:
