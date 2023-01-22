@@ -13,30 +13,24 @@ class Predictor:
         # Load model
         self.model = keras.models.load_model("snakeSupervision/trainedModel.h5")
 
-    def predict(self, game_state: typing.Dict, action: str, subject: str) -> typing.Tuple(str, float):
+    def predict(self, game_state: typing.Dict, action: str, subject: str):
         board_width = game_state['board']['width']
         board_height = game_state['board']['height']
-        subject_snake = {}
-        for snake in game_state['board']['snakes']:
-            if snake['id'] == subject:
-                subject_snake = snake
-                break
 
         # Transform game state into nn input arrays
         subject_head = np.zeros((board_width, board_height))
-        subject_head[subject_snake['head']['x']][subject_snake['head']['y']] = 1
         subject_body = np.zeros((board_width, board_height))
-        for part in subject_snake['body'][1:]:
-            subject_body[part['x']][part['y']] = 1
-
         heads_array = np.zeros((board_width, board_height))
         bodies_array = np.zeros((board_width, board_height))
         for snake in game_state['board']['snakes']:
             if snake['id'] == subject:
-                continue
-            heads_array[snake['head']['x']][snake['head']['y']] = 1
-            for part in snake['body'][1:]:
-                bodies_array[part['x']][part['y']] = 1
+                subject_head[snake['head']['x']][snake['head']['y']] = 1
+                for part in snake['body'][1:]:
+                    subject_body[part['x']][part['y']] = 1
+            else:
+                heads_array[snake['head']['x']][snake['head']['y']] = 1
+                for part in snake['body'][1:]:
+                    bodies_array[part['x']][part['y']] = 1
 
         food_array = np.zeros((board_width, board_height))
         for food in game_state['board']['food']:
