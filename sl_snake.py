@@ -15,6 +15,7 @@ from operator import is_
 import random
 import typing
 import sys
+import json
 
 from snakeSupervision.predictor import Predictor
 
@@ -43,6 +44,33 @@ def start(game_state: typing.Dict):
 # end is called when your Battlesnake finishes a game
 def end(game_state: typing.Dict):
     print("GAME OVER\n")
+    previous_actions = get_previous_actions(game_state)
+    with open(f"games/{game_state['game']['id']}.json", "a") as fp:
+        json.dump(previous_actions, fp)
+        fp.write('\n')
+        # Last snake alive is the winner
+        if len(game_state['board']['snakes']) == 0:
+            json.dump({'winner': ''}, fp)
+        else:
+            json.dump({'winner': game_state['board']['snakes'][0]['id']}, fp)
+
+
+def get_previous_actions(game_state: typing.Dict)-> typing.Dict:
+    previous_actions = {}
+    for snake in game_state['board']['snakes']:
+        previous_actions[snake['id']] = get_action(snake['body'][1], snake['head'])
+    return previous_actions
+
+
+def get_action(from_pos: typing.Dict, to_pos: typing.Dict)-> str:
+    if to_pos['y'] > from_pos['y']:
+        return 'up'
+    elif to_pos['y'] < from_pos['y']:
+        return 'down'
+    elif to_pos['x'] > from_pos['x']:
+        return 'right'
+    elif to_pos['x'] < from_pos['x']:
+        return 'left'
 
 
 # Given a square, return all adjacent squares that are in bounds
@@ -61,7 +89,7 @@ def get_adjacent(position: typing.Dict, game_state: typing.Dict):
 
 
 # Given head position and direction, return the new head position
-def get_move_position(head: typing.Dict, direction: str):
+def get_move_position(head: typing.Dict, direction: str)-> typing.Dict:
     if direction == 'up':
         return {'y': head['y']+1, 'x': head['x']}
     elif direction == 'down':
@@ -140,6 +168,13 @@ def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
 # Valid moves are "up", "down", "left", or "right"
 # See https://docs.battlesnake.com/api/example-move for available data
 def move(game_state: typing.Dict) -> typing.Dict:
+    # Record actions taken by each snake in previous turn and write to file
+    if game_state['turn'] > 0:
+        previous_actions = get_previous_actions(game_state)
+        with open(f"games/{game_state['game']['id']}.json", "a") as fp:
+            json.dump(previous_actions, fp)
+            fp.write('\n')
+
 
     directions = ["up", "down", "left", "right"]
     danger_risk = {"up": 0.0, "down": 0.0, "left": 0.0, "right": 0.0}
@@ -158,12 +193,13 @@ def move(game_state: typing.Dict) -> typing.Dict:
 
     # For all moves with lowest risk, predict outcomes with model
     safe_moves = [
-        (move, risk)
-        for move, risk in sorted_risk.items()
+        move
+        for move in sorted_risk
         if danger_risk[move] == danger_risk[sorted_risk[0]]
     ]
     random.shuffle(safe_moves)  # Shuffle to avoid bias
-
+    next_move = safe_moves[0]
+    """
     # Predict outcomes for all safe moves
     predictions = []
     for move in safe_moves:
@@ -171,11 +207,16 @@ def move(game_state: typing.Dict) -> typing.Dict:
         predictions.append(predictor.predict(
             game_state, game_state['you']['id'], move
         ))
-        
+
     # Select best move
     print(f"Predictions: {predictions}")
     sorted_predictions = sorted(predictions, reverse=True, key=lambda x: x[1])
-    next_move = sorted_predictions[0][0]
+    next_move = sorted_predictions[0][0]"""
+
+    # Write state to file
+    with open(f"games/{game_state['game']['id']}.json", "a") as fp:
+        json.dump(game_state, fp)
+        fp.write('\n')
 
     # Respond to server
     print(f"MOVE {game_state['turn']}: Best move is {next_move}!")
