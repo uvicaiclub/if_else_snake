@@ -1,1 +1,1 @@
-web: python3 main.py -p 8001 -c "#0000FF" -d
+web: python3 main.py -p 8001 -c "#00FF00" -d
