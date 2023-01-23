@@ -18,11 +18,13 @@ import argparse
 from snakeSupervision.predictor import Predictor
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--color', default='#00FF00')
+parser.add_argument('-c', '--color', default=str(
+    hex(random.randrange(0, 2**24))
+))
 parser.add_argument('-p', '--port', default='8001')
-parser.add_argument('-m', '--model', default='basicModel.h5')
-parser.add_argument('-t', '--train', action='store_true')
+parser.add_argument('-s', '--save_games', action='store_true')
 parser.add_argument('-d', '--deployed', action='store_true')
+parser.add_argument('-m', '--model', default='basicModel.h5')
 args = parser.parse_args()
 
 predictor  = Predictor(args.model)
@@ -36,9 +38,9 @@ def info() -> typing.Dict:
     return {
         "apiversion": "1",
         "author": "me",  # TODO: Your Battlesnake Username
-        "color": args.color,  # TODO: Choose color
-        "head": "default",  # TODO: Choose head
-        "tail": "default",  # TODO: Choose tail
+        "color": args.color,
+        "head": "cosmic-horror",
+        "tail": "mystic-moon",
     }
 
 
