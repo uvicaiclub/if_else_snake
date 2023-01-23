@@ -3,7 +3,7 @@
 # The predictor loads model.h5, which is a keras model that was trained on the data in trainingData.json.
 
 import numpy as np
-from tensorflow import keras
+import keras
 import typing
 from copy import deepcopy
 
