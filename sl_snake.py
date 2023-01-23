@@ -20,6 +20,7 @@ import json
 from snakeSupervision.predictor import Predictor
 
 predictor  = Predictor()
+games_won = 0
 
 # info is called when you create your Battlesnake on play.battlesnake.com
 # and controls your Battlesnake's appearance
@@ -45,14 +46,19 @@ def start(game_state: typing.Dict):
 def end(game_state: typing.Dict):
     print("GAME OVER\n")
     previous_actions = get_previous_actions(game_state)
-    with open(f"games/{game_state['game']['id']}.json", "a") as fp:
-        json.dump(previous_actions, fp)
-        fp.write('\n')
-        # Last snake alive is the winner
-        if len(game_state['board']['snakes']) == 0:
-            json.dump({'winner': ''}, fp)
-        else:
-            json.dump({'winner': game_state['board']['snakes'][0]['id']}, fp)
+    global games_won
+    if game_state['board']['snakes'][0]['id'] == game_state['you']['id']:
+        games_won += 1
+    print(f"Games won: {games_won}")
+    if sys.argv[3] == 'train':
+        with open(f"games/{game_state['game']['id']}.json", "a") as fp:
+            json.dump(previous_actions, fp)
+            fp.write('\n')
+            # Last snake alive is the winner
+            if len(game_state['board']['snakes']) == 0:
+                json.dump({'winner': ''}, fp)
+            else:
+                json.dump({'winner': game_state['board']['snakes'][0]['id']}, fp)
 
 
 def get_previous_actions(game_state: typing.Dict)-> typing.Dict:
@@ -128,7 +134,7 @@ def avoid_walls(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict
 
 # Given game state & current safe moves, determines moves that will be fatal colision
 # with any snake body. Returns updated safe moves.
-def avoid_snakes(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
+def avoid_snake_bodies(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
 
     for move in danger_risk:
@@ -136,7 +142,7 @@ def avoid_snakes(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dic
         # Loop through all snakes on the board
         for snake in game_state['board']['snakes']:
             # Loop through all body parts of this snake
-            for square in snake['body'][:-1]:   # Skip the tail, hadled below
+            for square in snake['body'][:-1]:   # Skip the tail, handled below
                 if square == next_head:
                     danger_risk[move] += 1
             # Tail is a special case, if the snake can't eat then it can't grow
@@ -169,7 +175,7 @@ def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
 # See https://docs.battlesnake.com/api/example-move for available data
 def move(game_state: typing.Dict) -> typing.Dict:
     # Record actions taken by each snake in previous turn and write to file
-    if game_state['turn'] > 0:
+    if game_state['turn'] > 0 and sys.argv[3] == 'train':
         previous_actions = get_previous_actions(game_state)
         with open(f"games/{game_state['game']['id']}.json", "a") as fp:
             json.dump(previous_actions, fp)
@@ -186,7 +192,7 @@ def move(game_state: typing.Dict) -> typing.Dict:
     danger_risk = avoid_walls(game_state, danger_risk)
 
     # Avoid hitting snakes
-    danger_risk = avoid_snakes(game_state, danger_risk)
+    danger_risk = avoid_snake_bodies(game_state, danger_risk)
 
     # Sort directions by danger risk
     sorted_risk = sorted(directions, key=lambda x: danger_risk[x])
@@ -200,6 +206,7 @@ def move(game_state: typing.Dict) -> typing.Dict:
     random.shuffle(safe_moves)  # Shuffle to avoid bias
     if len(safe_moves) == 1:
         next_move = safe_moves[0]
+        print(f"MOVE {game_state['turn']}: Best move is {next_move}!")
     else:
         # Predict outcomes for all safe moves
         predictions = []
@@ -210,17 +217,21 @@ def move(game_state: typing.Dict) -> typing.Dict:
             ))
 
         # Select best move
-        print(f"Predictions: {predictions}")
         sorted_predictions = sorted(predictions, reverse=True, key=lambda x: x[1])
         next_move = sorted_predictions[0][0]
+        format_predictions = [
+            f"{move} ({round(prob, 3)})"
+            for move, prob in sorted_predictions
+        ]
+        print(f"MOVE {game_state['turn']}: Best move is {next_move}! Predictions: {format_predictions}")
 
     # Write state to file
-    with open(f"games/{game_state['game']['id']}.json", "a") as fp:
-        json.dump(game_state, fp)
-        fp.write('\n')
+    if sys.argv[3] == 'train':
+        with open(f"games/{game_state['game']['id']}.json", "a") as fp:
+            json.dump(game_state, fp)
+            fp.write('\n')
 
     # Respond to server
-    print(f"MOVE {game_state['turn']}: Best move is {next_move}!")
     return {'move': next_move}
 
 # Start server when `python main.py` is run
