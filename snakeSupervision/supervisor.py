@@ -1,10 +1,11 @@
 # Train a model to predict if player 0 will win a battlesnake game given a game state.
-import json
-import numpy as np
-import keras
 import argparse
+import json
+
+import keras
+import numpy as np
+from keras.layers import Conv1D, Dense, Flatten, MaxPool1D, Reshape
 from keras.models import Sequential
-from keras.layers import Dense, Conv1D, Reshape, MaxPool1D, Flatten
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--model', default='basicModel.h5')

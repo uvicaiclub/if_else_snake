@@ -10,10 +10,10 @@
 # To get you started we've included code to prevent your Battlesnake from moving backwards.
 # For more info see docs.battlesnake.com
 
+import argparse
+import json
 import random
 import typing
-import json
-import argparse
 
 from snakeSupervision.predictor import Predictor
 

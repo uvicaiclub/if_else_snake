@@ -2,10 +2,10 @@
 # if the snake moves up, down, left, or right, respectively.
 # The predictor loads model.h5, which is a keras model that was trained on the data in trainingData.json.
 
-import numpy as np
-import keras
 import typing
-from copy import deepcopy
+
+import keras
+import numpy as np
 
 
 class Predictor:

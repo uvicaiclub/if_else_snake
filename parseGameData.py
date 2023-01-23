@@ -2,6 +2,7 @@
 
 import json
 import os
+
 import numpy as np
 
 trainingExamples = open('snakeSupervision/trainingExamples.json', 'a')
