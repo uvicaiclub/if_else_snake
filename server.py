@@ -6,7 +6,7 @@ from flask import Flask
 from flask import request
 
 
-def run_server(handlers: typing.Dict, port_num: int):
+def run_server(handlers: typing.Dict, port_num: int, deployed: bool):
     app = Flask("Battlesnake")
 
     @app.get("/")
@@ -36,8 +36,10 @@ def run_server(handlers: typing.Dict, port_num: int):
             "server", "battlesnake/github/starter-snake-python"
         )
         return response
-
-    host = "127.0.0.1"
+    if deployed:
+        host = "0.0.0.0"
+    else:
+        host = "127.0.0.1"
     print(port_num)
     port = int(os.environ.get("PORT", port_num))
 

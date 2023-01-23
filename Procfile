@@ -1,1 +1,1 @@
-web: python3 main.py 8080 "#FF0000"
+web: python3 sl_snake.py -p 8080 -c "#0000FF" -d

@@ -23,6 +23,7 @@ parser.add_argument('-c', '--color', default='#00FF00')
 parser.add_argument('-p', '--port', default='8001')
 parser.add_argument('-m', '--model', default='basicModel.h5')
 parser.add_argument('-t', '--train', action='store_true')
+parser.add_argument('-d', '--deployed', action='store_true')
 args = parser.parse_args()
 
 predictor  = Predictor(args.model)
@@ -244,4 +245,4 @@ def move(game_state: typing.Dict) -> typing.Dict:
 if __name__ == "__main__":
     from server import run_server
 
-    run_server({"info": info, "start": start, "move": move, "end": end}, args.port)
+    run_server({"info": info, "start": start, "move": move, "end": end}, args.port, args.deployed)
