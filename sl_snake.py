@@ -10,8 +10,6 @@
 # To get you started we've included code to prevent your Battlesnake from moving backwards.
 # For more info see docs.battlesnake.com
 
-from inspect import ismemberdescriptor
-from operator import is_
 import random
 import typing
 import sys
