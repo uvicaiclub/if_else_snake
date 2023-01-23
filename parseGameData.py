@@ -20,17 +20,18 @@ for filename in os.scandir('games/'):
             elif 'winner' in line_dict:
                 winner = line_dict['winner']
             else:
-                if len(line_dict) == 2: 
-                    actions_list.append(line_dict)
-                else:
-                    states_list.pop()
+                actions_list.append(line_dict)
             next_line = game_data.readline()
     # For each state, actions pair create a training example for each snake as subject
-    for state, actions in zip(states_list, actions_list):
+    # Limit to last %10 of the game
+    start_index = len(states_list) - len(states_list) // 10
+    for state, actions in zip(states_list[start_index:], actions_list[start_index:]):
         board_width = state['board']['width']
         board_height = state['board']['height']
         for subject_snake in state['board']['snakes']:
             subject_id = subject_snake['id']
+            if subject_id not in actions:
+                continue
             subject_action = actions[subject_id]
             # Transform game state into nn input arrays
             subject_head = np.zeros((board_width, board_height))
