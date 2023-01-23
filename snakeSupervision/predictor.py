@@ -9,9 +9,9 @@ from copy import deepcopy
 
 
 class Predictor:
-    def __init__(self):
+    def __init__(self, model_path: str):
         # Load model
-        self.model = keras.models.load_model("snakeSupervision/trainedModel.h5")
+        self.model = keras.models.load_model(f"snakeSupervision/{model_path}")
 
     def predict(self, game_state: typing.Dict, action: str, subject: str):
         board_width = game_state['board']['width']
@@ -46,10 +46,18 @@ class Predictor:
         elif action == 'right':
             actions_array[3] = 1
 
+        # Flatten arrays into 1D arrays
+        subject_head = subject_head.flatten()
+        subject_body = subject_body.flatten()
+        heads_array = heads_array.flatten()
+        bodies_array = bodies_array.flatten()
+        food_array = food_array.flatten()
+        actions_array = actions_array.flatten()
+
         # Combine arrays into one nn input array
-        nn_inputs = np.concatenate(
-            [subject_head, subject_body, heads_array, bodies_array, food_array, actions_array],
-            axis=None
-        ).reshape(1, 609)
+        nn_inputs = np.concatenate((
+            subject_head, subject_body, heads_array, bodies_array, food_array, actions_array
+        )).reshape(1, 609)
         # Predict probabilty of winning with this action
-        return (action, self.model.predict(nn_inputs))
+        prediction = (action, self.model(nn_inputs, training=False))
+        return (prediction[0], float(prediction[1][0][0]))
