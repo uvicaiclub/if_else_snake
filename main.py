@@ -13,10 +13,14 @@
 from inspect import ismemberdescriptor
 from operator import is_
 import random
-import tarfile
 import typing
-import sys
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-c', '--color', default='#00FF00')
+parser.add_argument('-p', '--port', default='8001')
+parser.add_argument('-d', '--deployed', action='store_true')
+args = parser.parse_args()
 
 games_won = 0
 
@@ -28,7 +32,7 @@ def info() -> typing.Dict:
     return {
         "apiversion": "1",
         "author": "me",  # TODO: Your Battlesnake Username
-        "color": sys.argv[2],  # TODO: Choose color
+        "color": args.color,  # TODO: Choose color
         "head": "default",  # TODO: Choose head
         "tail": "default",  # TODO: Choose tail
     }
@@ -222,4 +226,4 @@ def move(game_state: typing.Dict) -> typing.Dict:
 if __name__ == "__main__":
     from server import run_server
 
-    run_server({"info": info, "start": start, "move": move, "end": end}, sys.argv[1])
+    run_server({"info": info, "start": start, "move": move, "end": end}, args.port, args.deployed)

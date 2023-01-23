@@ -12,7 +12,6 @@
 
 import random
 import typing
-import sys
 import json
 import argparse
 
@@ -57,7 +56,7 @@ def end(game_state: typing.Dict):
     if game_state['board']['snakes'][0]['id'] == game_state['you']['id']:
         games_won += 1
     print(f"Games won: {games_won}")
-    if sys.argv[3] == 'train':
+    if args.train:
         with open(f"games/{game_state['game']['id']}.json", "a") as fp:
             json.dump(previous_actions, fp)
             fp.write('\n')
@@ -182,7 +181,7 @@ def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
 # See https://docs.battlesnake.com/api/example-move for available data
 def move(game_state: typing.Dict) -> typing.Dict:
     # Record actions taken by each snake in previous turn and write to file
-    if game_state['turn'] > 0 and sys.argv[3] == 'train':
+    if game_state['turn'] > 0 and args.train:
         previous_actions = get_previous_actions(game_state)
         with open(f"games/{game_state['game']['id']}.json", "a") as fp:
             json.dump(previous_actions, fp)
@@ -233,7 +232,7 @@ def move(game_state: typing.Dict) -> typing.Dict:
         print(f"MOVE {game_state['turn']}: Best move is {next_move}! Predictions: {format_predictions}")
 
     # Write state to file
-    if sys.argv[3] == 'train':
+    if args.train:
         with open(f"games/{game_state['game']['id']}.json", "a") as fp:
             json.dump(game_state, fp)
             fp.write('\n')

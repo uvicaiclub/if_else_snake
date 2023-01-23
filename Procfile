@@ -1,1 +1,1 @@
-web: python3 sl_snake.py -p 8080 -c "#0000FF" -d
+web: python3 main.py -p 8001 -c "#FF0000" -d
