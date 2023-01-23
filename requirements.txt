@@ -1,1 +1,4 @@
 Flask==2.2.2
+tensorflow
+numpy
+keras

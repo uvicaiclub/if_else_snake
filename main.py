@@ -18,6 +18,8 @@ import typing
 import sys
 
 
+games_won = 0
+
 # info is called when you create your Battlesnake on play.battlesnake.com
 # and controls your Battlesnake's appearance
 # TIP: If you open your Battlesnake URL in a browser you should see this data
@@ -41,6 +43,10 @@ def start(game_state: typing.Dict):
 # end is called when your Battlesnake finishes a game
 def end(game_state: typing.Dict):
     print("GAME OVER\n")
+    global games_won
+    if game_state['board']['snakes'][0]['id'] == game_state['you']['id']:
+        games_won += 1
+    print(f"Games won: {games_won}")
 
 
 # Given a square, return all adjacent squares that are in bounds
