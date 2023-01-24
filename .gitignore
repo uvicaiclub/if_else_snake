@@ -7,3 +7,4 @@ debug.log
 LICENSE
 games/*
 training*.json
+*.stats
