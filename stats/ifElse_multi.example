@@ -1,0 +1,4 @@
+Opponent Name | Games Played | Win/Loss | Wins | Losses | Draws | Longest | Avg Length
+--------------------------------------------------------------------------
+sl_basic      | 1000         | 42.431   | 356  | 483    | 161   | 265     | 79.372    
+sl_conv       | 1000         | 39.114   | 318  | 495    | 187   | 215     | 74.523    
