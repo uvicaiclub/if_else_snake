@@ -1,36 +1,42 @@
 #!/bin/bash
 
+solo_games=$1
+robin_rounds=$2 # Number of rounds to play in robin robin tournament
+
 function solo_if_else() {
-    for i in {1..50}
+    local rounds=$1
+    for (( i = 0; i < $rounds; i++ )) 
     do
-        ./battlesnake  play -g solo -n if_else -u http://localhost:8001
+        ./battlesnake  play -g solo -n if_else -u http://localhost:8001 >/dev/null 2>&1
     done
 }
 
 function solo_sl_basic() {
-    for i in {1..50}
+    local rounds=$1
+    for (( i = 0; i < $rounds; i++ )) 
     do
-        ./battlesnake  play -g solo -n sl_basic -u http://localhost:8002
+        ./battlesnake  play -g solo -n sl_basic -u http://localhost:8002 >/dev/null 2>&1
     done
 }
 
 function solo_sl_conv() {
-    for i in {1..50}
+    local rounds=$1
+    for (( i = 0; i < $rounds; i++ )) 
     do
-        ./battlesnake  play -g solo -n sl_conv -u http://localhost:8003
+        ./battlesnake  play -g solo -n sl_conv -u http://localhost:8003 >/dev/null 2>&1
     done
 }
 
 # Run solo games for each snake
-solo_if_else &
-solo_sl_basic &
-solo_sl_conv &
+solo_if_else $solo_games &
+solo_sl_basic $solo_games &
+solo_sl_conv $solo_games &
 wait
 
 # Run each snake against each other snake
-for i in {1..50}
+for (( i = 0; i < $robin_rounds; i++ )) 
 do
-    ./battlesnake  play -n if_else -u http://localhost:8001 -n sl_basic -u http://localhost:8002
-    ./battlesnake  play -n sl_basic -u http://localhost:8002 -n sl_conv -u http://localhost:8003
-    ./battlesnake  play -n sl_conv -u http://localhost:8003 -n if_else -u http://localhost:8001
+    ./battlesnake  play -n if_else -u http://localhost:8001 -n sl_basic -u http://localhost:8002 >/dev/null 2>&1
+    ./battlesnake  play -n sl_basic -u http://localhost:8002 -n sl_conv -u http://localhost:8003 >/dev/null 2>&1
+    ./battlesnake  play -n sl_conv -u http://localhost:8003 -n if_else -u http://localhost:8001 >/dev/null 2>&1
 done
