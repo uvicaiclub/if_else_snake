@@ -39,7 +39,6 @@ def run_server(handlers: typing.Dict, port_num: int, deployed: bool):
         host = "0.0.0.0"
     else:
         host = "127.0.0.1"
-    print(port_num)
     port = int(os.environ.get("PORT", port_num))
 
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
