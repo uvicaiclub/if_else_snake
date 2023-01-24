@@ -162,7 +162,7 @@ def end(game_state: typing.Dict):
                 )
             print(stats_string)
             if args.stats_file is not None:
-                with open(args.stats_file+'_multi.stats', 'w') as f:
+                with open('stats/'+args.stats_file+'_multi.stats', 'w') as f:
                     f.write(stats_string)
 
 
