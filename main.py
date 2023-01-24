@@ -215,7 +215,7 @@ def avoid_walls(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict
 
 # Given game state & current safe moves, determines moves that will be fatal colision
 # with any snake body. Returns updated safe moves.
-def avoid_snakes(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
+def avoid_snake_bodies(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
 
     for move in danger_risk:
@@ -227,34 +227,7 @@ def avoid_snakes(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dic
                 if square == next_head:
                     danger_risk[move] += 1
             # Tail is a special case, if the snake can't eat then it can't grow
-            if snake['body'][-1] == next_head:
-                for head_reach in get_adjacent(snake['head'], game_state):
-                    if head_reach in game_state['board']['food']:
-                        danger_risk[move] += 1
-
-    return danger_risk
-
-
-# Add risk of collisions with other snakes' heads
-def avoid_heads(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
-    my_head = game_state['you']['head']  # Position of your head
-
-    # Loop through possible moves
-    for move in danger_risk:
-        next_head = get_move_position(my_head, move)
-        # Loop through all snakes on the board
-        for snake in game_state['board']['snakes']:
-            # Don't avoid your own head
-            if snake['head'] == my_head:
-                continue
-            # Get possible moves for this snake
-            adversary_moves = get_adjacent(snake['body'][0], game_state)
-
-            # Loop through all possible moves for this snake's head
-            for adversary_move in adversary_moves:
-                if  adversary_move == next_head:
-                    danger_risk[move] += 0.25   # A wild guess
-
+            # Ignore it so that we can compare performance against augmented snakes
     return danger_risk
 
 
@@ -292,27 +265,19 @@ def move(game_state: typing.Dict) -> typing.Dict:
     danger_risk = avoid_walls(game_state, danger_risk)
 
     # Avoid hitting snakes
-    danger_risk = avoid_snakes(game_state, danger_risk)
-
-    # Avoid hitting heads
-    danger_risk =  avoid_heads(game_state, danger_risk)
+    danger_risk = avoid_snake_bodies(game_state, danger_risk)
 
     # Sort directions by danger risk
     sorted_risk = sorted(directions, key=lambda x: danger_risk[x])
 
-    # For all moves with lowest risk, check if there is food there
+    # Choose a random move from saffest moves
     safe_moves = [
         move 
         for move in sorted_risk 
         if danger_risk[move] == danger_risk[sorted_risk[0]]
     ]
     random.shuffle(safe_moves)  # Shuffle to avoid bias
-    
-    nom_nom_nom = food_moves(game_state, game_state['you']['head'], safe_moves)
-    if len(nom_nom_nom) > 0:
-        next_move = nom_nom_nom[0]
-    else:
-        next_move = safe_moves[0]
+    next_move = safe_moves[0]
 
     print(f"MOVE {game_state['turn']}: {next_move} | {danger_risk}")
     # Send response to server
