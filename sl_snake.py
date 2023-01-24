@@ -26,6 +26,12 @@ parser.add_argument('-s', '--save_games', action='store_true')
 parser.add_argument('-d', '--deployed', action='store_true')
 parser.add_argument('-m', '--model', default='basicModel.h5')
 parser.add_argument('--stats_file', help='Path to store game stats')
+parser.add_argument('--print_level', default=2, 
+    help='''3: decision values in move()
+            2: silence move()
+            1: silence all prints''',
+    choices=[1,2,3]
+)
 args = parser.parse_args()
 
 predictor  = Predictor(args.model)
@@ -53,7 +59,6 @@ game_stats = {
 # and controls your Battlesnake's appearance
 # TIP: If you open your Battlesnake URL in a browser you should see this data
 def info() -> typing.Dict:
-    print("INFO")
     return {
         "apiversion": "1",
         "author": "me",  # TODO: Your Battlesnake Username
@@ -65,8 +70,6 @@ def info() -> typing.Dict:
 
 # start is called when your Battlesnake begins a game
 def start(game_state: typing.Dict):
-    print("GAME START")
-    print(f"Height: {game_state['board']['height']} Width: {game_state['board']['width']}")
     # Save current opponents
     if game_state['game']['ruleset']['name'] != 'solo':
         global current_opponents
@@ -85,85 +88,6 @@ def start(game_state: typing.Dict):
                 game_stats['gametypes']['multi']['turns_survived'][snake_name] = []
                 game_stats['gametypes']['multi']['longest_survival'][snake_name] = 0
                 game_stats['gametypes']['multi']['turns_survived_avg'][snake_name] = 0
-
-
-# end is called when your Battlesnake finishes a game
-def end(game_state: typing.Dict):
-    print("GAME OVER\n")
-    # Save game data
-    if args.save_games:
-        previous_actions = get_previous_actions(game_state)
-        with open(f"games/{game_state['game']['id']}.json", "a") as fp:
-            json.dump(previous_actions, fp)
-            fp.write('\n')
-            # Last snake alive is the winner
-            if len(game_state['board']['snakes']) == 0:
-                json.dump({'winner': ''}, fp)
-            else:
-                json.dump({'winner': game_state['board']['snakes'][0]['id']}, fp)
-    # Update game stats
-    global game_stats
-    if game_state['game']['ruleset']['name'] == 'solo':
-        # Update solo game stats
-        game_stats['gametypes']['solo']['games_played'] += 1
-        game_stats['gametypes']['solo']['turns_survived'].append(game_state['turn'])
-        game_stats['gametypes']['solo']['turns_survived_avg'] = sum(
-            game_stats['gametypes']['solo']['turns_survived']
-        ) / game_stats['gametypes']['solo']['games_played']
-
-        if game_state['turn'] > game_stats['gametypes']['solo']['longest_survival']:
-            game_stats['gametypes']['solo']['longest_survival'] = game_state['turn']
-
-        print("SOLO STATS:")
-        stats_string = "{:<12} | {:<7} | {:<10}\n-----------------------------------\n{:<12} | {:<7} | {:<10}".format(
-            'Games Played', 'Longest', 'Avg Length',
-            game_stats['gametypes']['solo']['games_played'],
-            game_stats['gametypes']['solo']['longest_survival'],
-            game_stats['gametypes']['solo']['turns_survived_avg']
-        )
-        print(stats_string)
-        if args.stats_file is not None:
-            with open('stats/'+args.stats_file+'_solo.stats', 'w') as f:
-                f.write(stats_string)
-    else:
-        # Save stats for each opponent
-        global current_opponents
-        for snake_name in current_opponents:
-            game_stats['gametypes']['multi']['games_played'][snake_name] += 1
-
-            if len(game_state['board']['snakes']) == 0:
-                game_stats['gametypes']['multi']['draws'][snake_name] += 1
-            elif game_state['board']['snakes'][0]['id'] == game_state['you']['id']:
-                game_stats['gametypes']['multi']['wins'][snake_name] += 1
-            else:
-                game_stats['gametypes']['multi']['losses'][snake_name] += 1
-            
-            game_stats['gametypes']['multi']['turns_survived'][snake_name].append(game_state['turn'])
-            game_stats['gametypes']['multi']['turns_survived_avg'][snake_name] = sum(
-                game_stats['gametypes']['multi']['turns_survived'][snake_name]
-            ) / game_stats['gametypes']['multi']['games_played'][snake_name]
-            if game_state['turn'] > game_stats['gametypes']['multi']['longest_survival'][snake_name]:
-                game_stats['gametypes']['multi']['longest_survival'][snake_name] = game_state['turn']
-            
-            print("MULTIPLAYER STATS:")
-            stats_string = "{:<13} | {:<12} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
-                'Opponent Name', 'Games Played', 'Wins', 'Losses', 'Draws', 'Longest', 'Avg Length'
-            )
-            stats_string += "--------------------------------------------------------------------------\n"
-            for snake_name in game_stats['gametypes']['multi']['games_played']:
-                stats_string += "{:<13} | {:<12} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
-                    snake_name,
-                    game_stats['gametypes']['multi']['games_played'][snake_name],
-                    game_stats['gametypes']['multi']['wins'][snake_name],
-                    game_stats['gametypes']['multi']['losses'][snake_name],
-                    game_stats['gametypes']['multi']['draws'][snake_name],
-                    game_stats['gametypes']['multi']['longest_survival'][snake_name],
-                    game_stats['gametypes']['multi']['turns_survived_avg'][snake_name]
-                )
-            print(stats_string)
-            if args.stats_file is not None:
-                with open('stats/'+args.stats_file+'_multi.stats', 'w') as f:
-                    f.write(stats_string)
 
 
 def get_previous_actions(game_state: typing.Dict)-> typing.Dict:
@@ -311,7 +235,8 @@ def move(game_state: typing.Dict) -> typing.Dict:
     random.shuffle(safe_moves)  # Shuffle to avoid bias
     if len(safe_moves) == 1:
         next_move = safe_moves[0]
-        print(f"MOVE {game_state['turn']}: Best move is {next_move}!")
+        if args.print_level >= 3:
+            print(f"MOVE {game_state['turn']}: Best move is {next_move}!")
     else:
         # Predict outcomes for all safe moves
         predictions = []
@@ -328,7 +253,8 @@ def move(game_state: typing.Dict) -> typing.Dict:
             f"{move} ({round(prob, 3)})"
             for move, prob in sorted_predictions
         ]
-        print(f"MOVE {game_state['turn']}: Best move is {next_move}! Predictions: {format_predictions}")
+        if args.print_level >= 3:
+            print(f"MOVE {game_state['turn']}: Best move is {next_move}! Predictions: {format_predictions}")
 
     # Write state to file
     if args.save_games:
@@ -338,6 +264,89 @@ def move(game_state: typing.Dict) -> typing.Dict:
 
     # Respond to server
     return {'move': next_move}
+
+
+# end is called when your Battlesnake finishes a game
+def end(game_state: typing.Dict):
+    print("GAME OVER\n")
+    # Save game data
+    if args.save_games:
+        previous_actions = get_previous_actions(game_state)
+        with open(f"games/{game_state['game']['id']}.json", "a") as fp:
+            json.dump(previous_actions, fp)
+            fp.write('\n')
+            # Last snake alive is the winner
+            if len(game_state['board']['snakes']) == 0:
+                json.dump({'winner': ''}, fp)
+            else:
+                json.dump({'winner': game_state['board']['snakes'][0]['id']}, fp)
+    # Update game stats
+    global game_stats
+    if game_state['game']['ruleset']['name'] == 'solo':
+        game_stats['gametypes']['solo']['games_played'] += 1
+        game_stats['gametypes']['solo']['turns_survived'].append(game_state['turn'])
+        game_stats['gametypes']['solo']['turns_survived_avg'] = sum(
+            game_stats['gametypes']['solo']['turns_survived']
+        ) / game_stats['gametypes']['solo']['games_played']
+
+        if game_state['turn'] > game_stats['gametypes']['solo']['longest_survival']:
+            game_stats['gametypes']['solo']['longest_survival'] = game_state['turn']
+
+        print("SOLO STATS:")
+        stats_string = "{:<12} | {:<7} | {:<10}\n-----------------------------------\n{:<12} | {:<7} | {:<10}".format(
+            'Games Played', 'Longest', 'Avg Length',
+            game_stats['gametypes']['solo']['games_played'],
+            game_stats['gametypes']['solo']['longest_survival'],
+            game_stats['gametypes']['solo']['turns_survived_avg']
+        )
+        print(stats_string)
+        if args.stats_file is not None:
+            with open('stats/'+args.stats_file+'_solo.stats', 'w') as f:
+                f.write(stats_string)
+    else:
+        # Save stats for each opponent
+        global current_opponents
+        for snake_name in current_opponents:
+            game_stats['gametypes']['multi']['games_played'][snake_name] += 1
+
+            if len(game_state['board']['snakes']) == 0:
+                game_stats['gametypes']['multi']['draws'][snake_name] += 1
+            elif game_state['board']['snakes'][0]['id'] == game_state['you']['id']:
+                game_stats['gametypes']['multi']['wins'][snake_name] += 1
+            else:
+                game_stats['gametypes']['multi']['losses'][snake_name] += 1
+            
+            game_stats['gametypes']['multi']['turns_survived'][snake_name].append(game_state['turn'])
+            game_stats['gametypes']['multi']['turns_survived_avg'][snake_name] = sum(
+                game_stats['gametypes']['multi']['turns_survived'][snake_name]
+            ) / game_stats['gametypes']['multi']['games_played'][snake_name]
+            if game_state['turn'] > game_stats['gametypes']['multi']['longest_survival'][snake_name]:
+                game_stats['gametypes']['multi']['longest_survival'][snake_name] = game_state['turn']
+            
+            print("MULTIPLAYER STATS:")
+            stats_string = "{:<13} | {:<12} | {:<8} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
+                'Opponent Name', 'Games Played', 'Win/Loss', 'Wins', 'Losses', 'Draws', 'Longest', 'Avg Length'
+            )
+            stats_string += "--------------------------------------------------------------------------\n"
+            for snake_name in game_stats['gametypes']['multi']['games_played']:
+                wins = game_stats['gametypes']['multi']['wins'][snake_name]
+                losses = game_stats['gametypes']['multi']['losses'][snake_name]
+                win_loss = round(wins / (wins + losses) * 100, 3)
+                stats_string += "{:<13} | {:<12} | {:<8} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
+                    snake_name,
+                    game_stats['gametypes']['multi']['games_played'][snake_name],
+                    win_loss,
+                    wins,
+                    losses,
+                    game_stats['gametypes']['multi']['draws'][snake_name],
+                    game_stats['gametypes']['multi']['longest_survival'][snake_name],
+                    game_stats['gametypes']['multi']['turns_survived_avg'][snake_name]
+                )
+            print(stats_string)
+            if args.stats_file is not None:
+                with open('stats/'+args.stats_file+'_multi.stats', 'w') as f:
+                    f.write(stats_string)
+
 
 # Start server when `python main.py` is run
 if __name__ == "__main__":
