@@ -15,24 +15,27 @@ import json
 import random
 import typing
 
-from snakeSupervision.predictor import Predictor
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--color', default=str(
-    hex(random.randrange(0, 2**24))
-))
-parser.add_argument('-p', '--port', default='8001')
-parser.add_argument('-s', '--save_games', action='store_true')
-parser.add_argument('-d', '--deployed', action='store_true')
-parser.add_argument('-m', '--model', default='basicModel.h5')
+parser.add_argument('-c', '--color',
+default=str(hex(random.randrange(0, 2**24))), help='Hex color code. Default random.')
+parser.add_argument('-p', '--port', default='8001',
+help='Port to run Battlesnake on. Default 8001.')
+parser.add_argument('-d', '--deployed', action='store_true',
+help='Opens server to the internet')
+parser.add_argument('-s', '--save_games', action='store_true',
+help='Save game data to file for training')
+parser.add_argument('-m', '--model', default='basicModel.h5',
+help='Filename of model to use for predictions. Default basicModel.h5')
 parser.add_argument('--stats_file', help='Path to store game stats')
-parser.add_argument('--print_level', default=2, 
-    help='''3: decision values in move()
-            2: silence move()
-            1: silence all prints''',
-    choices=[1,2,3]
+parser.add_argument('--print_level', default=2, choices=[1,2,3],
+    help='''1: silence all prints
+            2: (Default) silence move(), info(), start()
+            3: print from all endpoints'''
 )
 args = parser.parse_args()
+
+from snakeSupervision.predictor import Predictor
 
 predictor  = Predictor(args.model)
 game_stats = {
