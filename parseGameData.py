@@ -8,7 +8,7 @@ import numpy as np
 trainingExamples = open('snakeSupervision/trainingExamples.json', 'a')
 trainingLabels = open('snakeSupervision/trainingLabels.json', 'a')
 
-for filename in os.scandir('games/'):
+for i, filename in enumerate(os.scandir('games/')):
     states_list = []
     actions_list = []
     winner = ''
@@ -29,16 +29,13 @@ for filename in os.scandir('games/'):
     for state, actions in zip(states_list[start_index:], actions_list[start_index:]):
         board_width = state['board']['width']
         board_height = state['board']['height']
-        for subject_snake in state['board']['snakes']:
-            subject_id = subject_snake['id']
-            if subject_id not in actions:
-                continue
-            subject_action = actions[subject_id]
+
+        for subject_id, subject_action in actions.items():
             # Transform game state into nn input arrays
-            subject_head = np.zeros((board_width, board_height))
-            subject_body = np.zeros((board_width, board_height))
-            heads_array = np.zeros((board_width, board_height))
-            bodies_array = np.zeros((board_width, board_height))
+            subject_head = [[0 for _ in range(board_height)] for _ in range(board_width)]
+            subject_body = [[0 for _ in range(board_height)] for _ in range(board_width)]
+            heads_array = [[0 for _ in range(board_height)] for _ in range(board_width)]
+            bodies_array = [[0 for _ in range(board_height)] for _ in range(board_width)]
             for snake in state['board']['snakes']:
                 if snake['id'] == subject_id:
                     subject_head[snake['head']['x']][snake['head']['y']] = 1
@@ -49,34 +46,32 @@ for filename in os.scandir('games/'):
                     for part in snake['body'][1:]:
                         bodies_array[part['x']][part['y']] = 1
             
-            food_array = np.zeros((board_width, board_height))
+            food_array = [[0 for _ in range(board_height)] for _ in range(board_width)]
             for food in state['board']['food']:
                 food_array[food['x']][food['y']] = 1
 
-            actions_array = np.zeros((4))
+            actions_array = [[0 for _ in range(board_height)] for _ in range(board_width)]
             if subject_action == 'up':
-                actions_array[0] = 1
+                actions_array[0][0] = 1
             elif subject_action == 'down':
-                actions_array[1] = 1
+                actions_array[0][1] = 1
             elif subject_action == 'left':
-                actions_array[2] = 1
+                actions_array[0][2] = 1
             elif subject_action == 'right':
-                actions_array[3] = 1
+                actions_array[0][3] = 1
 
-            # Flatten arrays into 1D arrays
-            subject_head = subject_head.flatten()
-            subject_body = subject_body.flatten()
-            heads_array = heads_array.flatten()
-            bodies_array = bodies_array.flatten()
-            food_array = food_array.flatten()
-            actions_array = actions_array.flatten()
-
-            final_array = np.concatenate((
+            final_array = [
                 subject_head, subject_body, heads_array, bodies_array, food_array, actions_array
-            ))
-            json.dump(final_array.tolist(), trainingExamples)
+            ]
+            json.dump(final_array, trainingExamples)
             trainingExamples.write('\n')
             if subject_id == winner:
                 trainingLabels.write('1')
             else:
                 trainingLabels.write('0')
+    
+    if i % 1000 == 0:
+        print(f'{i} games processed')
+
+trainingExamples.close()
+trainingLabels.close()

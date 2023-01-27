@@ -4,19 +4,22 @@ import json
 
 import keras
 import numpy as np
-from keras.layers import Conv1D, Dense, Flatten, MaxPool1D, Reshape
-from keras.models import Sequential
+from keras.layers import Input, Conv2D, Flatten, Dense
+from keras.models import Sequential, Model
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-m', '--model', default='basicModel.h5')
+parser.add_argument('-m', '--model', default='convModel.h5')
 args = parser.parse_args()
+
 
 # loads training examples from json file
 def getTrainingExamples():
     trainingExamples = []
     with open("trainingExamples.json") as json_file:
         for line in json_file:
-            trainingExamples.append(json.loads(line))
+            ex = json.loads(line)
+            input_array = np.transpose(np.asarray(ex), (1,2,0))
+            trainingExamples.append(input_array)
     return trainingExamples
 
 
@@ -26,21 +29,19 @@ def getTrainingLabels():
         trainingLabels = [int(c) for c in json_file.read()]
     return trainingLabels
 
-if args.model == 'basicModel.h5':
-    # Basic net
-    model = Sequential()
-    model.add(Dense(30, activation='relu', input_dim=609))
-    model.add(Dense(30, activation='relu'))
-    model.add(Dense(1, activation='sigmoid'))
-else:
-    # Conv net
-    model = Sequential()
-    model.add(Reshape((609, 1), input_shape=(609,)))
-    model.add(Conv1D(32, kernel_size=3, activation='relu'))
-    model.add(MaxPool1D(pool_size=2))
-    model.add(Flatten())
-    model.add(Dense(64, activation='relu'))
-    model.add(Dense(1, activation='sigmoid'))
+
+# Conv net
+# Input layer with 6 channels
+model = Sequential()
+model.add(Conv2D(
+    32, kernel_size=(3, 3), activation='relu', 
+    input_shape=(11, 11, 6)
+))
+model.add(Flatten())
+model.add(Dense(128, activation='relu'))
+model.add(Dense(64, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
 
 # compiles model
 model.compile(optimizer='adam',
