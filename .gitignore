@@ -8,3 +8,4 @@ LICENSE
 games/*
 training*.json
 *.stats
+*.zip
