@@ -25,8 +25,8 @@ parser.add_argument('-d', '--deployed', action='store_true',
 help='Opens server to the internet')
 parser.add_argument('-s', '--save_games', action='store_true',
 help='Save game data to file for training')
-parser.add_argument('-m', '--model', default='basicModel.h5',
-help='Filename of model to use for predictions. Default basicModel.h5')
+parser.add_argument('-m', '--model', default='convModel.h5',
+help='Filename of model to use for predictions. Default convModel.h5')
 parser.add_argument('--stats_file', help='Path to store game stats')
 parser.add_argument('--print_level', default=2, choices=[1,2,3],
     help='''1: silence all prints
@@ -334,7 +334,10 @@ def end(game_state: typing.Dict):
             for snake_name in game_stats['gametypes']['multi']['games_played']:
                 wins = game_stats['gametypes']['multi']['wins'][snake_name]
                 losses = game_stats['gametypes']['multi']['losses'][snake_name]
-                win_loss = round(wins / (wins + losses) * 100, 3)
+                if wins + losses == 0:
+                    win_loss = 0
+                else:
+                    win_loss = round(wins / (wins + losses) * 100, 3)
                 stats_string += "{:<13} | {:<12} | {:<8} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
                     snake_name,
                     game_stats['gametypes']['multi']['games_played'][snake_name],

@@ -275,7 +275,10 @@ def end(game_state: typing.Dict):
             for snake_name in game_stats['gametypes']['multi']['games_played']:
                 wins = game_stats['gametypes']['multi']['wins'][snake_name]
                 losses = game_stats['gametypes']['multi']['losses'][snake_name]
-                win_loss = round(wins / (wins + losses) * 100, 3)
+                if wins + losses == 0:
+                    win_loss = 0
+                else:
+                    win_loss = round(wins / (wins + losses) * 100, 3)
                 stats_string += "{:<13} | {:<12} | {:<8} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
                     snake_name,
                     game_stats['gametypes']['multi']['games_played'][snake_name],
