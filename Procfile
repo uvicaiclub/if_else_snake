@@ -1,1 +1,1 @@
-web: python3 main.py -p 8001 -c "#00FF00" -d
+web: python3 sl_snake.py -p 8080 -c "#00FF00" -d -m newConv_2.h5

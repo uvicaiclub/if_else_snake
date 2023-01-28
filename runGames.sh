@@ -9,11 +9,11 @@ do
     for (( j = 0; j < $batch_size; j++ ))
     do
         # run the game, output to gamei.json
-        ./battlesnake  play -n if_else -u http://localhost:8002 -n sl_snake -u http://localhost:8001 >/dev/null 2>&1
+        ./battlesnake  play -n if_else -u http://localhost:8001 -n sl_snake -u http://localhost:8002 >/dev/null 2>&1
     done
     python3 parseGameData.py
     cd snakeSupervision
-    python3 supervisor.py 2>/dev/null
+    python3 supervisor.py -m newConv_2.h5 2>/dev/null
     cd ..
     rm games/*
 done
