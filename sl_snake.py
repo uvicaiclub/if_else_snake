@@ -93,6 +93,22 @@ def start(game_state: typing.Dict):
                 game_stats['gametypes']['multi']['turns_survived_avg'][snake_name] = 0
 
 
+# Given a game state, perform common preprocessing and return results
+def preprocess(game_state: typing.Dict):
+    # Create obstacles array storing each body part's expected lifetime
+    obstacles = [
+        [0] * game_state['board']['height']
+        for x in range(game_state['board']['width'])
+    ]
+    for snake in game_state['board']['snakes']:
+        snake_length = len(snake['body'])
+        for i, body_part in enumerate(snake['body'][:-1]):
+            # Store distance of body part to it's own tail
+            # If snake just ate, tail pos is 1 otherwise it is 0
+            obstacles[body_part['x']][body_part['y']] = snake_length - (i + 1)
+    return obstacles
+
+
 def get_previous_actions(game_state: typing.Dict)-> typing.Dict:
     previous_actions = {}
     for snake in game_state['board']['snakes']:
@@ -101,104 +117,61 @@ def get_previous_actions(game_state: typing.Dict)-> typing.Dict:
 
 
 def get_action(from_pos: typing.Dict, to_pos: typing.Dict)-> str:
+    if from_pos == to_pos:
+        raise Exception('from_pos and to_pos are the same')
     if to_pos['y'] > from_pos['y']:
         return 'up'
     elif to_pos['y'] < from_pos['y']:
         return 'down'
     elif to_pos['x'] > from_pos['x']:
         return 'right'
-    elif to_pos['x'] < from_pos['x']:
+    else:
         return 'left'
-
-
-# Given a square, return all adjacent squares that are in bounds
-def get_adjacent(position: typing.Dict, game_state: typing.Dict):
-    up = {'y': position['y']+1, 'x': position['x']}
-    down = {'y': position['y']-1, 'x': position['x']}
-    left = {'x': position['x']-1, 'y': position['y']}
-    right = {'x': position['x']+1, 'y': position['y']}
-    return [ 
-        pos for pos in [up, down, left, right]
-        if pos['y'] >= 0
-        if pos['y'] <= game_state['board']['height']
-        if pos['x'] >= 0
-        if pos['x'] <= game_state['board']['width']
-    ]
 
 
 # Given head position and direction, return the new head position
 def get_move_position(head: typing.Dict, direction: str)-> typing.Dict:
+    if direction not in ['up', 'down', 'left', 'right']:
+        raise Exception('Invalid direction')
     if direction == 'up':
         return {'y': head['y']+1, 'x': head['x']}
     elif direction == 'down':
         return {'y': head['y']-1, 'x': head['x']}
     elif direction == 'left':
         return {'x': head['x']-1, 'y': head['y']}
-    elif direction == 'right':
+    else:
         return {'x': head['x']+1, 'y': head['y']}
 
 
-# Given game state & current safe moves, determines fatal out-of-bounds moves 
-# returns updated safe moves
-def avoid_walls(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    board_width = game_state['board']['width']
-    board_height = game_state['board']['height']
-
+# Given game state, head position, and current move risks, determines fatal out-of-bounds moves
+# returns updated move risks
+def avoid_walls(game_state: typing.Dict, head_pos: typing.Dict, danger_risk: typing.Dict) -> typing.Dict:
     # Left wall is at x = -1, don't go there
-    if my_head['x'] == 0:
+    if head_pos['x'] == 0:
         danger_risk['left'] += 1
-
     # Right wall is at x = board_width, don't go there
-    elif my_head['x'] == board_width-1:
+    elif head_pos['x'] == game_state['board']['width']-1:
         danger_risk['right'] += 1
-
     # Bottom wall is at y = -1, don't go there
-    if my_head['y'] == 0:
+    if head_pos['y'] == 0:
         danger_risk['down'] += 1
-
     # Top wall is at y = board_height, don't go there
-    elif my_head['y'] == board_height-1:
+    elif head_pos['y'] == game_state['board']['height']-1:
         danger_risk['up'] += 1
-
     return danger_risk
 
 
-# Given game state & current safe moves, determines moves that will be fatal colision
-# with any snake body. Returns updated safe moves.
-def avoid_snake_bodies(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-
+# Given obstacles array, head position & current move risk, determines moves that will be fatal colision
+# with any snake body. Returns updated move risk.
+def avoid_snake_bodies(obstacles: list, head_pos: typing.Dict, danger_risk: typing.Dict) -> typing.Dict:
     for move in danger_risk:
-        next_head = get_move_position(my_head, move)
-        # Loop through all snakes on the board
-        for snake in game_state['board']['snakes']:
-            # Loop through all body parts of this snake
-            for square in snake['body'][:-1]:   # Skip the tail, handled below
-                if square == next_head:
+        mov_pos = get_move_position(head_pos, move)
+        # Ensure that move is in bounds
+        if mov_pos['x'] >= 0 and mov_pos['x'] < len(obstacles):
+            if mov_pos['y'] >= 0 and mov_pos['y'] < len(obstacles[0]):
+                # If an obstacle is at move position, add 1 to risk
+                if obstacles[mov_pos['x']][mov_pos['y']] > 0:
                     danger_risk[move] += 1
-            # Tail is a special case, if the snake can't eat then it can't grow
-            # Let the model handle this case
-
-    return danger_risk
-
-
-def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
-
-    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        danger_risk["left"] += 1
-
-    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        danger_risk["right"] += 1
-
-    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        danger_risk["down"] += 1
-
-    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        danger_risk["up"] += 1
-
     return danger_risk
 
 
@@ -213,30 +186,27 @@ def move(game_state: typing.Dict) -> typing.Dict:
             json.dump(previous_actions, fp)
             fp.write('\n')
 
+    # Perform pre-processing
+    obstacles = preprocess(game_state)
 
     directions = ["up", "down", "left", "right"]
     danger_risk = {"up": 0.0, "down": 0.0, "left": 0.0, "right": 0.0}
-
-    # Avoid your own neck
-    danger_risk = avoid_neck(game_state, danger_risk)
+    my_head = game_state['you']['head']
 
     # Avoid hitting the walls
-    danger_risk = avoid_walls(game_state, danger_risk)
+    danger_risk = avoid_walls(game_state, my_head, danger_risk)
 
     # Avoid hitting snakes
-    danger_risk = avoid_snake_bodies(game_state, danger_risk)
-
-    # Sort directions by danger risk
-    sorted_risk = sorted(directions, key=lambda x: danger_risk[x])
+    danger_risk = avoid_snake_bodies(obstacles, my_head, danger_risk)
 
     # For all moves with lowest risk, predict outcomes with model
     safe_moves = [
         move
-        for move in sorted_risk
-        if danger_risk[move] == danger_risk[sorted_risk[0]]
+        for move in danger_risk
+        if danger_risk[move] == min(danger_risk.values())
     ]
     random.shuffle(safe_moves)  # Shuffle to avoid bias
-    if len(safe_moves) == 1:
+    if game_state['turn'] == 0 or len(safe_moves) == 1:
         next_move = safe_moves[0]
         if args.print_level >= 3:
             print(f"MOVE {game_state['turn']}: Best move is {next_move}!")
@@ -244,10 +214,14 @@ def move(game_state: typing.Dict) -> typing.Dict:
         # Predict outcomes for all safe moves
         predictions = []
         for move in safe_moves:
-            # Send game state and action to model
-            predictions.append(predictor.predict(
-                game_state, move, game_state['you']['id']
-            ))
+            try:
+                # Send game state and action to model
+                predictions.append(predictor.predict(
+                    game_state, move, game_state['you']['id']
+                ))
+            except ValueError:
+                # If model fails to predict, set to zero
+                predictions.append((move, 0.0))
 
         # Select best move
         sorted_predictions = sorted(predictions, reverse=True, key=lambda x: x[1])

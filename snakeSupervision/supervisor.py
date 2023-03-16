@@ -35,13 +35,12 @@ def getTrainingLabels():
 model = Sequential()
 model.add(Conv2D(
     32, kernel_size=(3, 3), activation='relu', 
-    input_shape=(11, 11, 6)
+    input_shape=(21, 21, 4)
 ))
 model.add(Flatten())
 model.add(Dense(128, activation='relu'))
 model.add(Dense(64, activation='relu'))
 model.add(Dense(1, activation='sigmoid'))
-
 
 # compiles model
 model.compile(optimizer='adam',
@@ -53,7 +52,7 @@ trainingExamples = np.asarray(getTrainingExamples())
 trainingLabels = np.asarray(getTrainingLabels())
 
 # trains model
-model.fit(trainingExamples, trainingLabels, epochs=5)
+model.fit(trainingExamples, trainingLabels, epochs=15)
 
 # saves model
 model.save(args.model)
