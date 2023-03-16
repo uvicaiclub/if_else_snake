@@ -174,6 +174,9 @@ def end(game_state: typing.Dict):
     max_len, turns_survived = ongoing_games[game_state['game']['id']][game_state['you']['id']]
     stats['sizes'].append(max_len)
     stats['turns'].append(turns_survived)
+    del ongoing_games[game_state['game']['id']][game_state['you']['id']]
+    if len(ongoing_games[game_state['game']['id']]) == 0:
+        del ongoing_games[game_state['game']['id']]
     winners = [snake['id'] for snake in game_state['board']['snakes']]
     if len(winners) == 1:
         if game_state['you']['id'] in winners:
@@ -182,7 +185,6 @@ def end(game_state: typing.Dict):
             stats['losses'] += 1
     else:
         stats['losses'] += 1
-
     # Print game stats
     print('STATS:')
     print(f"Games: {stats['games']}", f"Wins: {stats['wins']}", f"Losses: {stats['losses']}")
