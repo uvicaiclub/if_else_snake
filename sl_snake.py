@@ -15,10 +15,10 @@ import json
 import random
 import typing
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--color',
-default=str(hex(random.randrange(0, 2**24))), help='Hex color code. Default random.')
+default=random.choice(["#DFFF00","#FFBF00","#FF7F50","#DE3163","#9FE2BF","#40E0D0","#6495ED","#CCCCFF"]),
+help='Hex color code. Default random.')
 parser.add_argument('-p', '--port', default='8001',
 help='Port to run Battlesnake on. Default 8001.')
 parser.add_argument('-d', '--deployed', action='store_true',
@@ -27,8 +27,7 @@ parser.add_argument('-s', '--save_games', action='store_true',
 help='Save game data to file for training')
 parser.add_argument('-m', '--model', default='convModel.h5',
 help='Filename of model to use for predictions. Default convModel.h5')
-parser.add_argument('--stats_file', help='Path to store game stats')
-parser.add_argument('--print_level', default=2, choices=[1,2,3],
+parser.add_argument('--print_level', default=2, type=int, choices=[1,2,3],
     help='''1: silence all prints
             2: (Default) silence move(), info(), start()
             3: print from all endpoints'''
@@ -38,25 +37,17 @@ args = parser.parse_args()
 from snakeSupervision.predictor import Predictor
 
 predictor  = Predictor(args.model)
-game_stats = {
-    'gametypes': {
-        'solo': {
-            'games_played': 0,
-            'turns_survived': [],
-            'longest_survival': 0,
-            'turns_survived_avg': 0
-        },
-        'multi': {  # Dicts to save stats for individual opponents
-            'games_played': {},
-            'wins': {},
-            'losses': {},
-            'draws': {},
-            'turns_survived': {},
-            'longest_survival': {},
-            'turns_survived_avg': {}
-        }
-    }
+# Game stats
+stats = {
+    'games': 0,
+    'wins': 0,
+    'losses': 0,
+    'sizes': [],
+    'turns': []
 }
+# To handle multiple instance of this snake in the same game
+# Indexed as ongoing_games[game_id][snake_id] = [body_length, turns_survived]
+ongoing_games = {}
 
 # info is called when you create your Battlesnake on play.battlesnake.com
 # and controls your Battlesnake's appearance
@@ -73,24 +64,27 @@ def info() -> typing.Dict:
 
 # start is called when your Battlesnake begins a game
 def start(game_state: typing.Dict):
-    # Save current opponents
-    if game_state['game']['ruleset']['name'] != 'solo':
-        global current_opponents
-        current_opponents = [
-            snake['name']
-            for snake in game_state['board']['snakes']
-            if snake['id'] != game_state['you']['id']
-        ]
-        # Add opponent to game_stats if not already there
-        for snake_name in current_opponents:
-            if snake_name not in game_stats['gametypes']['multi']['games_played']:
-                game_stats['gametypes']['multi']['games_played'][snake_name] = 0
-                game_stats['gametypes']['multi']['wins'][snake_name] = 0
-                game_stats['gametypes']['multi']['losses'][snake_name] = 0
-                game_stats['gametypes']['multi']['draws'][snake_name] = 0
-                game_stats['gametypes']['multi']['turns_survived'][snake_name] = []
-                game_stats['gametypes']['multi']['longest_survival'][snake_name] = 0
-                game_stats['gametypes']['multi']['turns_survived_avg'][snake_name] = 0
+    # Initialize game stats
+    global ongoing_games
+    if game_state['game']['id'] not in ongoing_games:
+        ongoing_games[game_state['game']['id']] = {}
+    ongoing_games[game_state['game']['id']][game_state['you']['id']] = [len(game_state['you']['body']), 0]
+
+
+# Given a game state, perform common preprocessing and return results
+def preprocess(game_state: typing.Dict):
+    # Create obstacles array storing each body part's expected lifetime
+    obstacles = [
+        [0] * game_state['board']['height']
+        for x in range(game_state['board']['width'])
+    ]
+    for snake in game_state['board']['snakes']:
+        snake_length = len(snake['body'])
+        for i, body_part in enumerate(snake['body'][:-1]):
+            # Store distance of body part to it's own tail
+            # If snake just ate, tail pos is 1 otherwise it is 0
+            obstacles[body_part['x']][body_part['y']] = snake_length - (i + 1)
+    return obstacles
 
 
 def get_previous_actions(game_state: typing.Dict)-> typing.Dict:
@@ -111,21 +105,6 @@ def get_action(from_pos: typing.Dict, to_pos: typing.Dict)-> str:
         return 'left'
 
 
-# Given a square, return all adjacent squares that are in bounds
-def get_adjacent(position: typing.Dict, game_state: typing.Dict):
-    up = {'y': position['y']+1, 'x': position['x']}
-    down = {'y': position['y']-1, 'x': position['x']}
-    left = {'x': position['x']-1, 'y': position['y']}
-    right = {'x': position['x']+1, 'y': position['y']}
-    return [ 
-        pos for pos in [up, down, left, right]
-        if pos['y'] >= 0
-        if pos['y'] <= game_state['board']['height']
-        if pos['x'] >= 0
-        if pos['x'] <= game_state['board']['width']
-    ]
-
-
 # Given head position and direction, return the new head position
 def get_move_position(head: typing.Dict, direction: str)-> typing.Dict:
     if direction == 'up':
@@ -138,67 +117,35 @@ def get_move_position(head: typing.Dict, direction: str)-> typing.Dict:
         return {'x': head['x']+1, 'y': head['y']}
 
 
-# Given game state & current safe moves, determines fatal out-of-bounds moves 
-# returns updated safe moves
-def avoid_walls(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    board_width = game_state['board']['width']
-    board_height = game_state['board']['height']
-
+# Given game state, head position, and current move risks, determines fatal out-of-bounds moves
+# returns updated move risks
+def avoid_walls(game_state: typing.Dict, head_pos: typing.Dict, danger_risk: typing.Dict) -> typing.Dict:
     # Left wall is at x = -1, don't go there
-    if my_head['x'] == 0:
+    if head_pos['x'] == 0:
         danger_risk['left'] += 1
-
     # Right wall is at x = board_width, don't go there
-    elif my_head['x'] == board_width-1:
+    elif head_pos['x'] == game_state['board']['width']-1:
         danger_risk['right'] += 1
-
     # Bottom wall is at y = -1, don't go there
-    if my_head['y'] == 0:
+    if head_pos['y'] == 0:
         danger_risk['down'] += 1
-
     # Top wall is at y = board_height, don't go there
-    elif my_head['y'] == board_height-1:
+    elif head_pos['y'] == game_state['board']['height']-1:
         danger_risk['up'] += 1
-
     return danger_risk
 
 
-# Given game state & current safe moves, determines moves that will be fatal colision
-# with any snake body. Returns updated safe moves.
-def avoid_snake_bodies(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-
+# Given obstacles array, head position & current move risk, determines moves that will be fatal colision
+# with any snake body. Returns updated move risk.
+def avoid_snake_bodies(obstacles: list, head_pos: typing.Dict, danger_risk: typing.Dict) -> typing.Dict:
     for move in danger_risk:
-        next_head = get_move_position(my_head, move)
-        # Loop through all snakes on the board
-        for snake in game_state['board']['snakes']:
-            # Loop through all body parts of this snake
-            for square in snake['body'][:-1]:   # Skip the tail, handled below
-                if square == next_head:
+        mov_pos = get_move_position(head_pos, move)
+        # Ensure that move is in bounds
+        if mov_pos['x'] >= 0 and mov_pos['x'] < len(obstacles):
+            if mov_pos['y'] >= 0 and mov_pos['y'] < len(obstacles[0]):
+                # If an obstacle is at move position, add 1 to risk
+                if obstacles[mov_pos['x']][mov_pos['y']] > 0:
                     danger_risk[move] += 1
-            # Tail is a special case, if the snake can't eat then it can't grow
-            # Let the model handle this case
-
-    return danger_risk
-
-
-def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
-
-    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        danger_risk["left"] += 1
-
-    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        danger_risk["right"] += 1
-
-    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        danger_risk["down"] += 1
-
-    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        danger_risk["up"] += 1
-
     return danger_risk
 
 
@@ -206,6 +153,11 @@ def avoid_neck(game_state: typing.Dict, danger_risk: typing.Dict)-> typing.Dict:
 # Valid moves are "up", "down", "left", or "right"
 # See https://docs.battlesnake.com/api/example-move for available data
 def move(game_state: typing.Dict) -> typing.Dict:
+    global ongoing_games
+    ongoing_games[game_state['game']['id']][game_state['you']['id']] = [
+        len(game_state['you']['body']),
+        game_state['turn']
+    ]
     # Record actions taken by each snake in previous turn and write to file
     if game_state['turn'] > 0 and args.save_games:
         previous_actions = get_previous_actions(game_state)
@@ -213,27 +165,26 @@ def move(game_state: typing.Dict) -> typing.Dict:
             json.dump(previous_actions, fp)
             fp.write('\n')
 
-
+    # Perform pre-processing
+    obstacles = preprocess(game_state)
     directions = ["up", "down", "left", "right"]
     danger_risk = {"up": 0.0, "down": 0.0, "left": 0.0, "right": 0.0}
-
-    # Avoid your own neck
-    danger_risk = avoid_neck(game_state, danger_risk)
+    my_head = game_state['you']['head']
 
     # Avoid hitting the walls
-    danger_risk = avoid_walls(game_state, danger_risk)
+    danger_risk = avoid_walls(game_state, my_head, danger_risk)
 
     # Avoid hitting snakes
-    danger_risk = avoid_snake_bodies(game_state, danger_risk)
+    danger_risk = avoid_snake_bodies(obstacles, my_head, danger_risk)
 
-    # Sort directions by danger risk
-    sorted_risk = sorted(directions, key=lambda x: danger_risk[x])
+    # Get lowest risk value
+    min_risk = min(danger_risk.values())
 
-    # For all moves with lowest risk, predict outcomes with model
+    # Choose a random move from saffest moves
     safe_moves = [
-        move
-        for move in sorted_risk
-        if danger_risk[move] == danger_risk[sorted_risk[0]]
+        move 
+        for move in danger_risk 
+        if danger_risk[move] == min_risk
     ]
     random.shuffle(safe_moves)  # Shuffle to avoid bias
     if len(safe_moves) == 1:
@@ -283,75 +234,27 @@ def end(game_state: typing.Dict):
                 json.dump({'winner': ''}, fp)
             else:
                 json.dump({'winner': game_state['board']['snakes'][0]['id']}, fp)
-    # Update game stats
-    global game_stats
-    if game_state['game']['ruleset']['name'] == 'solo':
-        game_stats['gametypes']['solo']['games_played'] += 1
-        game_stats['gametypes']['solo']['turns_survived'].append(game_state['turn'])
-        game_stats['gametypes']['solo']['turns_survived_avg'] = sum(
-            game_stats['gametypes']['solo']['turns_survived']
-        ) / game_stats['gametypes']['solo']['games_played']
-
-        if game_state['turn'] > game_stats['gametypes']['solo']['longest_survival']:
-            game_stats['gametypes']['solo']['longest_survival'] = game_state['turn']
-
-        print("SOLO STATS:")
-        stats_string = "{:<12} | {:<7} | {:<10}\n-----------------------------------\n{:<12} | {:<7} | {:<10}".format(
-            'Games Played', 'Longest', 'Avg Length',
-            game_stats['gametypes']['solo']['games_played'],
-            game_stats['gametypes']['solo']['longest_survival'],
-            game_stats['gametypes']['solo']['turns_survived_avg']
-        )
-        print(stats_string)
-        if args.stats_file is not None:
-            with open('stats/'+args.stats_file+'_solo.stats', 'w') as f:
-                f.write(stats_string)
+        global ongoing_games
+    stats['games'] += 1
+    max_len, turns_survived = ongoing_games[game_state['game']['id']][game_state['you']['id']]
+    stats['sizes'].append(max_len)
+    stats['turns'].append(turns_survived)
+    del ongoing_games[game_state['game']['id']][game_state['you']['id']]
+    if len(ongoing_games[game_state['game']['id']]) == 0:
+        del ongoing_games[game_state['game']['id']]
+    winners = [snake['id'] for snake in game_state['board']['snakes']]
+    if len(winners) == 1:
+        if game_state['you']['id'] in winners:
+            stats['wins'] += 1
+        else:
+            stats['losses'] += 1
     else:
-        # Save stats for each opponent
-        global current_opponents
-        for snake_name in current_opponents:
-            game_stats['gametypes']['multi']['games_played'][snake_name] += 1
-
-            if len(game_state['board']['snakes']) == 0:
-                game_stats['gametypes']['multi']['draws'][snake_name] += 1
-            elif game_state['board']['snakes'][0]['id'] == game_state['you']['id']:
-                game_stats['gametypes']['multi']['wins'][snake_name] += 1
-            else:
-                game_stats['gametypes']['multi']['losses'][snake_name] += 1
-            
-            game_stats['gametypes']['multi']['turns_survived'][snake_name].append(game_state['turn'])
-            game_stats['gametypes']['multi']['turns_survived_avg'][snake_name] = sum(
-                game_stats['gametypes']['multi']['turns_survived'][snake_name]
-            ) / game_stats['gametypes']['multi']['games_played'][snake_name]
-            if game_state['turn'] > game_stats['gametypes']['multi']['longest_survival'][snake_name]:
-                game_stats['gametypes']['multi']['longest_survival'][snake_name] = game_state['turn']
-            
-            print("MULTIPLAYER STATS:")
-            stats_string = "{:<13} | {:<12} | {:<8} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
-                'Opponent Name', 'Games Played', 'Win/Loss', 'Wins', 'Losses', 'Draws', 'Longest', 'Avg Length'
-            )
-            stats_string += "--------------------------------------------------------------------------\n"
-            for snake_name in game_stats['gametypes']['multi']['games_played']:
-                wins = game_stats['gametypes']['multi']['wins'][snake_name]
-                losses = game_stats['gametypes']['multi']['losses'][snake_name]
-                if wins + losses == 0:
-                    win_loss = 0
-                else:
-                    win_loss = round(wins / (wins + losses) * 100, 3)
-                stats_string += "{:<13} | {:<12} | {:<8} | {:<4} | {:<6} | {:<5} | {:<7} | {:<10}\n".format(
-                    snake_name,
-                    game_stats['gametypes']['multi']['games_played'][snake_name],
-                    win_loss,
-                    wins,
-                    losses,
-                    game_stats['gametypes']['multi']['draws'][snake_name],
-                    game_stats['gametypes']['multi']['longest_survival'][snake_name],
-                    game_stats['gametypes']['multi']['turns_survived_avg'][snake_name]
-                )
-            print(stats_string)
-            if args.stats_file is not None:
-                with open('stats/'+args.stats_file+'_multi.stats', 'w') as f:
-                    f.write(stats_string)
+        stats['losses'] += 1
+    # Print game stats
+    print('STATS:')
+    print(f"Games: {stats['games']}", f"Wins: {stats['wins']}", f"Losses: {stats['losses']}")
+    print(f"Average max body size: {sum(stats['sizes'])/len(stats['sizes']):.1f}")
+    print(f"Average turns survived: {sum(stats['turns'])/len(stats['turns']):.1f}")
 
 
 # Start server when `python main.py` is run
